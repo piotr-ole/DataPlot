@@ -4,9 +4,11 @@ library(ggthemes)
 library(ggplot2)
 library(shinycssloaders)
 library(shinyhelper)
+#devtools::install_github('raredd/rawr')
+library(rawr)
 
 ui <- fluidPage(
-    titlePanel("Hello Shiny!"),
+    titlePanel("Plot your data!"),
     sidebarLayout(
         sidebarPanel(
             fileInput("file", "Choose a CSV file"),
@@ -18,8 +20,13 @@ ui <- fluidPage(
                 condition = "input.isScat == true",
                 htmlOutput("scatterHeader"),
                 uiOutput("scatterUI")
-            )
+            ),
             #uiOutput("barchart"),
+            conditionalPanel(
+                condition = "input.isBar == true",
+                htmlOutput("barHeader"),
+                uiOutput("barUI")
+            )
         ),
         mainPanel(
             plotOutput("scatterPlot",
@@ -29,7 +36,16 @@ ui <- fluidPage(
                            resetOnNew = TRUE
                        )) %>% 
                 helper(type = "markdown", content = "Scatterplot", title = "Scatterplot") %>%
-                withSpinner(color="#0dc5c1")
+                withSpinner(color="#0dc5c1"),
+            plotOutput("barPlot",
+                       dblclick = "plot1_dblclick",
+                       brush = brushOpts(
+                           id = "plot2_brush",
+                           resetOnNew = TRUE
+                       ))# %>% 
+                #helper(type = "markdown", content = "Scatterplot", title = "Scatterplot") %>%
+                #withSpinner(color="#0dc5c1")
+            
         )
     )   
 )
@@ -39,20 +55,23 @@ server <- function(input, output) {
     observe_helpers()
     
     ranges <- reactiveValues(x = NULL, y = NULL )
-
+    
+    # Scatterplot
     output$scatterHeader <- renderUI(HTML("<br><h4><b>Scatter plot</b></h4><br>"))
     
     output$scatterUI <- renderUI({
         if (!is.null(input$file)) {
             f <- input$file
-            list(
-                selectInput("xScat", "x-axis variable", c("None", colnames(read.csv(f$datapath)))),
-                selectInput("yScat", "y-axis variable", c("None", colnames(read.csv(f$datapath)))),
-                selectInput("colScat", "Color variable", c("None", colnames(read.csv(f$datapath)))),
-                selectInput("fillScat", "Fill variable", c("None", colnames(read.csv(f$datapath)))),
-                selectInput("sizeScat", "Size variable", c("None", colnames(read.csv(f$datapath)))),
-                actionButton("buttonScat", "Generate plot")
-            )
+            create_ui('Scat', rep(TRUE, 5), f$datapath)
+        }
+    })
+    
+    output$barHeader <- renderUI(HTML("<br><h4><b>Bar plot</b></h4><br>"))
+    
+    output$barUI <- renderUI({
+        if (!is.null(input$file)) {
+            f <- input$file
+            create_ui('Bar', c(TRUE,TRUE,TRUE,TRUE,FALSE), f$datapath)
         }
     })
     
@@ -92,6 +111,7 @@ server <- function(input, output) {
         }
     })
     })
+    
     
     observeEvent(input$plot1_dblclick, {
         brush <- input$plot1_brush
@@ -143,7 +163,27 @@ get_aes <- function(input) {
     my_aes <- my_aes[if_else(my_aes != 'None', TRUE, FALSE)]
     do.call(aes_string, my_aes)
 }
+
+create_ui <- function(shortname = "Scat", attributes_logicals, data_file) {
+    # logicals vector of true false for (x,y,col, fill, size)
+    attrs <- c("x", "y", "col", "fill" ,"size")
+    descriptions <- c("x-axis variable", "y-axis variable", "Color variable",
+                      "Fill variable", "Size variable")
+    good_attrs <- attrs[attributes_logicals]
+    good_descr <- descriptions[attributes_logicals]
     
+    options <- colnames(read.csv(data_file))
+    
+    l <- lapply(seq(good_attrs), function(i, good_descr, good_attrs, shortname, options) { 
+        selectInput(
+            paste0(good_attrs[i], shortname, collapse = ''),
+            good_descr[i],
+            c('None', options)
+            ) }, good_descr, good_attrs, shortname, options)
+    
+    l <- merge_lists(l, actionButton(paste0("button", shortname), "Generate plot"))
+    l
+}
 
 shinyApp(ui = ui, server = server)
 
