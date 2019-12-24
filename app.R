@@ -4,8 +4,18 @@ library(ggthemes)
 library(ggplot2)
 library(shinycssloaders)
 library(shinyhelper)
-#devtools::install_github('raredd/rawr')
-library(rawr)
+
+# utiity functions
+
+merge_lists <- function(l1, l2) {
+    c(l1, list(l2))
+}
+
+v <- function(style, shortname) {
+    paste0(style, shortname)
+}
+
+# UI
 
 ui <- fluidPage(
     titlePanel("Plot your data!"),
@@ -18,27 +28,27 @@ ui <- fluidPage(
             # scatterplot
             conditionalPanel(
                 condition = "input.isScat == true",
-                htmlOutput("scatterHeader"),
-                uiOutput("scatterUI")
+                htmlOutput("headerScat"),
+                uiOutput("UIScat")
             ),
             # barchart
             conditionalPanel(
                 condition = "input.isBar == true",
-                htmlOutput("barHeader"),
-                uiOutput("barUI")
+                htmlOutput("headerBar"),
+                uiOutput("UIBar")
             ),
             # heatmap
             conditionalPanel(
                 condition = "input.isHeat == true",
-                htmlOutput("heatHeader"),
-                uiOutput("heatUI")
+                htmlOutput("headerHeat"),
+                uiOutput("UIHeat")
             )
             
         ),
         mainPanel(
             conditionalPanel(
                 condition = "input.isScat == true",
-                plotOutput("scatterPlot",
+                plotOutput("plotScat",
                            dblclick = "plot1_dblclick",
                            brush = brushOpts(
                                id = "plot1_brush",
@@ -48,7 +58,7 @@ ui <- fluidPage(
                 ),
             conditionalPanel(
                 condition = "input.isBar == true",
-                plotOutput("barPlot",
+                plotOutput("plotBar",
                            dblclick = "plot2_dblclick",
                            brush = brushOpts(
                                id = "plot2_brush",
@@ -57,7 +67,7 @@ ui <- fluidPage(
             ),
             conditionalPanel(
                 condition = "input.isHeat == true",
-                plotOutput("heatPlot",
+                plotOutput("plotHeat",
                            dblclick = "plot3_dblclick",
                            brush = brushOpts(
                                id = "plot3_brush",
@@ -71,6 +81,8 @@ ui <- fluidPage(
     )   
 )
 
+# SERVER
+
 server <- function(input, output) {
     
     observe_helpers()
@@ -78,113 +90,22 @@ server <- function(input, output) {
     ranges <- reactiveValues(x = NULL, y = NULL )
     
     # Scatterplot UI
-    output$scatterHeader <- renderUI(HTML("<br><h4><b>Scatter plot</b></h4><br>"))
-    
-    output$scatterUI <- renderUI({
-        if (!is.null(input$file)) {
-            f <- input$file
-            create_ui('Scat', rep(TRUE, 5), f$datapath)
-        }
-    })
+    output_ui(input, output, 'Scatterplot', 'Scat')
     
     # barplot UI
-    output$barHeader <- renderUI(HTML("<br><h4><b>Bar plot</b></h4><br>"))
-    
-    output$barUI <- renderUI({
-        if (!is.null(input$file)) {
-            f <- input$file
-            create_ui('Bar', c(TRUE,TRUE,TRUE,TRUE,TRUE), f$datapath)
-        }
-    })
+    output_ui(input, output, 'Barplot', 'Bar')
     
     # heatmap UI
-    output$heatHeader <- renderUI(HTML("<br><h4><b>Heatmap plot</b></h4><br>"))
-    
-    output$heatUI <- renderUI({
-        if (!is.null(input$file)) {
-            f <- input$file
-            create_ui('Heat', c(TRUE,TRUE,TRUE,TRUE,TRUE), f$datapath)
-        }
-    })
+    output_ui(input, output, 'Heatmap', 'Heat')
     
     observeEvent(input$buttonScat, {  
-    output$scatterPlot <- renderPlot({
-        if (input$isScat == TRUE) {
-            if (!is.null(input$file)) {
-                # data processing
-                f <- input$file
-                create_plot(input, f$datapath, 'Scat', 'Scatterplot', 'geom_point' ,ranges)
-            }
-        }
-    })
-    })
+        render_plot_observed(input, output, 'Scat', 'Scatterplot',  'geom_point', ranges) })
     
     observeEvent(input$buttonBar, {
-    output$barPlot <- renderPlot({
-        if (input$isBar == TRUE) {
-            if (!is.null(input$file)) {
-                #browser()
-                # data processing
-                f <- input$file
-                dat <- read.csv(f$datapath, stringsAsFactors = TRUE)
-                # custom legend
-                legend <- get_legend(input, 'Bar')
-                my_aes <- get_aes(input, 'Bar')
-                ggplot(data =  dat, 
-                       mapping = my_aes
-                ) + 
-                    geom_bar() + 
-                    theme_fivethirtyeight() +
-                    ggtitle("Barplot")+
-                    xlab(input$xBar) +
-                    ylab(input$yBar) +
-                    theme(plot.title = element_text(hjust = 0.5), 
-                          axis.title = element_text(),
-                          panel.background = element_blank(),
-                          plot.background = element_blank(),
-                          legend.background = element_blank()) +
-                    #coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand = FALSE) +
-                    guides(color = guide_legend(title = legend$color),
-                           size = guide_legend(title = legend$size),
-                           fill = guide_legend(title = legend$fill))
-                
-            }
-        }
-    })
-    })
+        render_plot_observed(input, output, 'Bar', 'Barplot',  'geom_bar', ranges) })
     
     observeEvent(input$buttonHeat, {
-        output$heatPlot <- renderPlot({
-            if (input$isHeat == TRUE) {
-                if (!is.null(input$file)) {
-                    #browser()
-                    # data processing
-                    f <- input$file
-                    dat <- read.csv(f$datapath, stringsAsFactors = TRUE)
-                    # custom legend
-                    legend <- get_legend(input, 'Heat')
-                    my_aes <- get_aes(input, 'Heat')
-                    ggplot(data =  dat, 
-                           mapping = my_aes
-                    ) + 
-                        geom_tile() + 
-                        theme_fivethirtyeight() +
-                        ggtitle("Heatmap")+
-                        xlab(input$xHeat) +
-                        ylab(input$yHeat) +
-                        theme(plot.title = element_text(hjust = 0.5), 
-                              axis.title = element_text(),
-                              panel.background = element_blank(),
-                              plot.background = element_blank(),
-                              legend.background = element_blank()) +
-                        guides(color = guide_legend(title = legend$color),
-                               size = guide_legend(title = legend$size),
-                               fill = guide_legend(title = legend$fill))
-                    
-                }
-            }
-        })
-    })
+        render_plot_observed(input, output, 'Heat', 'Heatplot',  'geom_tile', ranges) })
     
     observeEvent(input$plot1_dblclick, {
         brush <- input$plot1_brush
@@ -214,7 +135,7 @@ get_legend <- function(input, shortname) {
     list(color = color, size = size, fill = fill)
 }
 
-set_value <- function(value, standard) {
+set_value <- function(value, standard = NULL) {
     if (value != 'None') {
         return(sym(value))
     }
@@ -247,7 +168,7 @@ create_plot <- function(input, datapath, shortname, title, plot_type, ranges) {
     legend <- get_legend(input, shortname)
     my_aes <- get_aes(input, shortname)
     #browser()
-    ggplot(data =  dat, 
+    p <- ggplot(data =  dat, 
            mapping = my_aes
     ) + 
         get(plot_type)() +
@@ -264,17 +185,17 @@ create_plot <- function(input, datapath, shortname, title, plot_type, ranges) {
         guides(color = guide_legend(title = legend$color),
                size = guide_legend(title = legend$size),
                fill = guide_legend(title = legend$fill))
-}
-
-v <- function(style, shortname) {
-    paste0(style, shortname)
+    if (input[[v('facet', shortname)]] != 'None'){
+        p <- p + facet_wrap(sym(input[[v('facet', shortname)]]))
+    }
+    p
 }
 
 create_ui <- function(shortname = "Scat", attributes_logicals, data_file) {
     # logicals vector of true false for (x,y,col, fill, size)
-    attrs <- c("x", "y", "col", "fill" ,"size")
+    attrs <- c("x", "y", "col", "fill" ,"size", "facet")
     descriptions <- c("x-axis variable", "y-axis variable", "Color variable",
-                      "Fill variable", "Size variable")
+                      "Fill variable", "Size variable", "Facet variable")
     good_attrs <- attrs[attributes_logicals]
     good_descr <- descriptions[attributes_logicals]
     
@@ -286,14 +207,36 @@ create_ui <- function(shortname = "Scat", attributes_logicals, data_file) {
             good_descr[i],
             c('None', options)
             ) }, good_descr, good_attrs, shortname, options)
-    
     l <- merge_lists(l, actionButton(paste0("button", shortname), "Generate plot"))
     l
 }
 
-merge_lists <- function(l1, l2) {
-    c(l1, list(l2))
+output_ui <- function(input, output, title, shortname) {
+    full_title <- sprintf("<br><h4><b>%s</b></h4><br>", title)
+    output[[v('header', shortname)]] <- renderUI(HTML(full_title))
+    
+    output[[v('UI', shortname)]] <- renderUI({
+        if (!is.null(input$file)) {
+            f <- input$file
+            create_ui(shortname, rep(TRUE, 5), f$datapath)
+        }
+    })
+    output
+}
+
+render_plot_observed <- function(input, output, shortname, title, plot_type, ranges) {
+    output[[v('plot', shortname)]] <- renderPlot({
+        if (input[[v('is', shortname)]] == TRUE) {
+            if (!is.null(input$file)) {
+                # data processing
+                f <- input$file
+                create_plot(input, f$datapath, shortname, title, plot_type, ranges)
+            }
+        }
+    })
+    output
 }
 
 shinyApp(ui = ui, server = server)
+
 
