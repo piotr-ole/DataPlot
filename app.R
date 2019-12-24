@@ -15,6 +15,26 @@ v <- function(style, shortname) {
     paste0(style, shortname)
 }
 
+create_conditional_panel <- function(shortname) {
+    conditionalPanel(
+        condition = sprintf("input.is%s == true", shortname),
+        htmlOutput(v("header", shortname)),
+        uiOutput(v("UI", shortname))
+    )
+}
+
+draw_brush <- function(input, shortname, ranges) {
+    brush <- input[[sprintf("plot%s_brush", shortname)]]
+    if (!is.null(brush)) {
+        ranges$x <- c(brush$xmin, brush$xmax)
+        ranges$y <- c(brush$ymin, brush$ymax)
+        
+    } else {
+        ranges$x <- NULL
+        ranges$y <- NULL
+    }
+}
+
 # UI
 
 ui <- fluidPage(
@@ -22,60 +42,46 @@ ui <- fluidPage(
     sidebarLayout(
         sidebarPanel(
             fileInput("file", "Choose a CSV file"),
-            checkboxInput(inputId = "isScat", label = "Scatterplot"),
+            checkboxInput(inputId = "isScat", label = "Scatterplot") 
+                %>% helper(type = "markdown", content = "Menu"),
             checkboxInput(inputId = "isBar", label = "Barchart"),
             checkboxInput(inputId = "isHeat", label = "Heatmap"),
             # scatterplot
-            conditionalPanel(
-                condition = "input.isScat == true",
-                htmlOutput("headerScat"),
-                uiOutput("UIScat")
-            ),
+            create_conditional_panel('Scat'),
             # barchart
-            conditionalPanel(
-                condition = "input.isBar == true",
-                htmlOutput("headerBar"),
-                uiOutput("UIBar")
-            ),
+            create_conditional_panel('Bar'),
             # heatmap
-            conditionalPanel(
-                condition = "input.isHeat == true",
-                htmlOutput("headerHeat"),
-                uiOutput("UIHeat")
-            )
+            create_conditional_panel('Heat')
             
         ),
         mainPanel(
             conditionalPanel(
                 condition = "input.isScat == true",
                 plotOutput("plotScat",
-                           dblclick = "plot1_dblclick",
+                           dblclick = "plotScat_dblclick",
                            brush = brushOpts(
-                               id = "plot1_brush",
+                               id = "plotScat_brush",
                                resetOnNew = TRUE
-                           )) %>% 
-                    helper(type = "markdown", content = "Scatterplot", title = "Scatterplot")
-                ),
+                           ))
+                ) %>% helper(type = "markdown", content = "Plot"),
             conditionalPanel(
                 condition = "input.isBar == true",
                 plotOutput("plotBar",
-                           dblclick = "plot2_dblclick",
+                           dblclick = "plotBar_dblclick",
                            brush = brushOpts(
-                               id = "plot2_brush",
+                               id = "plotBar_brush",
                                resetOnNew = TRUE
                            ))
             ),
             conditionalPanel(
                 condition = "input.isHeat == true",
                 plotOutput("plotHeat",
-                           dblclick = "plot3_dblclick",
+                           dblclick = "plotHeat_dblclick",
                            brush = brushOpts(
-                               id = "plot3_brush",
+                               id = "plotHeat_brush",
                                resetOnNew = TRUE
                            ))
-                )# %>% 
-                #helper(type = "markdown", content = "Scatterplot", title = "Scatterplot") %>%
-                #withSpinner(color="#0dc5c1")
+                )
             
         )
     )   
@@ -87,7 +93,9 @@ server <- function(input, output) {
     
     observe_helpers()
     
-    ranges <- reactiveValues(x = NULL, y = NULL )
+    rangesScat <- reactiveValues(x = NULL, y = NULL )
+    rangesBar <- reactiveValues(x = NULL, y = NULL )
+    rangesHeat <- reactiveValues(x = NULL, y = NULL )
     
     # Scatterplot UI
     output_ui(input, output, 'Scatterplot', 'Scat')
@@ -99,24 +107,24 @@ server <- function(input, output) {
     output_ui(input, output, 'Heatmap', 'Heat')
     
     observeEvent(input$buttonScat, {  
-        render_plot_observed(input, output, 'Scat', 'Scatterplot',  'geom_point', ranges) })
+        render_plot_observed(input, output, 'Scat', 'Scatterplot',  'geom_point', rangesScat) })
     
     observeEvent(input$buttonBar, {
-        render_plot_observed(input, output, 'Bar', 'Barplot',  'geom_bar', ranges) })
+        render_plot_observed(input, output, 'Bar', 'Barplot',  'geom_bar', rangesBar) })
     
     observeEvent(input$buttonHeat, {
-        render_plot_observed(input, output, 'Heat', 'Heatplot',  'geom_tile', ranges) })
+        render_plot_observed(input, output, 'Heat', 'Heatplot',  'geom_tile', rangesHeat) })
     
-    observeEvent(input$plot1_dblclick, {
-        brush <- input$plot1_brush
-        if (!is.null(brush)) {
-            ranges$x <- c(brush$xmin, brush$xmax)
-            ranges$y <- c(brush$ymin, brush$ymax)
-            
-        } else {
-            ranges$x <- NULL
-            ranges$y <- NULL
-        }
+    observeEvent(input$plotScat_dblclick, {
+        draw_brush(input, 'Scat', rangesScat)
+    })
+    
+    observeEvent(input$plotBar_dblclick, {
+        draw_brush(input, 'Bar', rangesBar)
+    })
+    
+    observeEvent(input$plotHeat_dblclick, {
+        draw_brush(input, 'Heat', rangesHeat)
     })
     
 }
