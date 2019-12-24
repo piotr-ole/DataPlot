@@ -12,37 +12,58 @@ ui <- fluidPage(
     sidebarLayout(
         sidebarPanel(
             fileInput("file", "Choose a CSV file"),
-            checkboxInput(inputId = "isHeat", label = "Heatmap"),
-            checkboxInput(inputId = "isBar", label = "Barchart"),
             checkboxInput(inputId = "isScat", label = "Scatterplot"),
-            #uiOutput("heatmap"),
+            checkboxInput(inputId = "isBar", label = "Barchart"),
+            checkboxInput(inputId = "isHeat", label = "Heatmap"),
+            # scatterplot
             conditionalPanel(
                 condition = "input.isScat == true",
                 htmlOutput("scatterHeader"),
                 uiOutput("scatterUI")
             ),
-            #uiOutput("barchart"),
+            # barchart
             conditionalPanel(
                 condition = "input.isBar == true",
                 htmlOutput("barHeader"),
                 uiOutput("barUI")
+            ),
+            # heatmap
+            conditionalPanel(
+                condition = "input.isHeat == true",
+                htmlOutput("heatHeader"),
+                uiOutput("heatUI")
             )
+            
         ),
         mainPanel(
-            plotOutput("scatterPlot",
-                       dblclick = "plot1_dblclick",
-                       brush = brushOpts(
-                           id = "plot1_brush",
-                           resetOnNew = TRUE
-                       )) %>% 
-                helper(type = "markdown", content = "Scatterplot", title = "Scatterplot") %>%
-                withSpinner(color="#0dc5c1"),
-            plotOutput("barPlot",
-                       dblclick = "plot1_dblclick",
-                       brush = brushOpts(
-                           id = "plot2_brush",
-                           resetOnNew = TRUE
-                       ))# %>% 
+            conditionalPanel(
+                condition = "input.isScat == true",
+                plotOutput("scatterPlot",
+                           dblclick = "plot1_dblclick",
+                           brush = brushOpts(
+                               id = "plot1_brush",
+                               resetOnNew = TRUE
+                           )) %>% 
+                    helper(type = "markdown", content = "Scatterplot", title = "Scatterplot")
+                ),
+            conditionalPanel(
+                condition = "input.isBar == true",
+                plotOutput("barPlot",
+                           dblclick = "plot2_dblclick",
+                           brush = brushOpts(
+                               id = "plot2_brush",
+                               resetOnNew = TRUE
+                           ))
+            ),
+            conditionalPanel(
+                condition = "input.isHeat == true",
+                plotOutput("heatPlot",
+                           dblclick = "plot3_dblclick",
+                           brush = brushOpts(
+                               id = "plot3_brush",
+                               resetOnNew = TRUE
+                           ))
+                )# %>% 
                 #helper(type = "markdown", content = "Scatterplot", title = "Scatterplot") %>%
                 #withSpinner(color="#0dc5c1")
             
@@ -56,7 +77,7 @@ server <- function(input, output) {
     
     ranges <- reactiveValues(x = NULL, y = NULL )
     
-    # Scatterplot
+    # Scatterplot UI
     output$scatterHeader <- renderUI(HTML("<br><h4><b>Scatter plot</b></h4><br>"))
     
     output$scatterUI <- renderUI({
@@ -66,12 +87,23 @@ server <- function(input, output) {
         }
     })
     
+    # barplot UI
     output$barHeader <- renderUI(HTML("<br><h4><b>Bar plot</b></h4><br>"))
     
     output$barUI <- renderUI({
         if (!is.null(input$file)) {
             f <- input$file
-            create_ui('Bar', c(TRUE,TRUE,TRUE,TRUE,FALSE), f$datapath)
+            create_ui('Bar', c(TRUE,TRUE,TRUE,TRUE,TRUE), f$datapath)
+        }
+    })
+    
+    # heatmap UI
+    output$heatHeader <- renderUI(HTML("<br><h4><b>Heatmap plot</b></h4><br>"))
+    
+    output$heatUI <- renderUI({
+        if (!is.null(input$file)) {
+            f <- input$file
+            create_ui('Heat', c(TRUE,TRUE,TRUE,TRUE,TRUE), f$datapath)
         }
     })
     
@@ -81,28 +113,37 @@ server <- function(input, output) {
             if (!is.null(input$file)) {
                 # data processing
                 f <- input$file
-                dat <- read.csv(f$datapath, stringsAsFactors = TRUE)
-                dat <- dat %>% 
-                    mutate(color_ = rep("#2ca25f", nrow(dat))) %>%
-                    mutate(size_ = rep(1, nrow(dat)))
-                # custom legend
-                legend <- get_legend(input$colScat, input$sizeScat, input$fillScat)
-                my_aes <- get_aes(input)
+                create_plot(input, f$datapath, 'Scat', 'Scatterplot', 'geom_point' ,ranges)
+            }
+        }
+    })
+    })
+    
+    observeEvent(input$buttonBar, {
+    output$barPlot <- renderPlot({
+        if (input$isBar == TRUE) {
+            if (!is.null(input$file)) {
                 #browser()
+                # data processing
+                f <- input$file
+                dat <- read.csv(f$datapath, stringsAsFactors = TRUE)
+                # custom legend
+                legend <- get_legend(input, 'Bar')
+                my_aes <- get_aes(input, 'Bar')
                 ggplot(data =  dat, 
                        mapping = my_aes
-                       ) + 
-                    geom_point() + 
+                ) + 
+                    geom_bar() + 
                     theme_fivethirtyeight() +
-                    ggtitle(paste0("Scatter plot ", input$yScat, "~", input$xScat)) +
-                    xlab(input$xScat) +
-                    ylab(input$yScat) +
+                    ggtitle("Barplot")+
+                    xlab(input$xBar) +
+                    ylab(input$yBar) +
                     theme(plot.title = element_text(hjust = 0.5), 
                           axis.title = element_text(),
                           panel.background = element_blank(),
                           plot.background = element_blank(),
                           legend.background = element_blank()) +
-                    coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand = FALSE) +
+                    #coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand = FALSE) +
                     guides(color = guide_legend(title = legend$color),
                            size = guide_legend(title = legend$size),
                            fill = guide_legend(title = legend$fill))
@@ -112,6 +153,38 @@ server <- function(input, output) {
     })
     })
     
+    observeEvent(input$buttonHeat, {
+        output$heatPlot <- renderPlot({
+            if (input$isHeat == TRUE) {
+                if (!is.null(input$file)) {
+                    #browser()
+                    # data processing
+                    f <- input$file
+                    dat <- read.csv(f$datapath, stringsAsFactors = TRUE)
+                    # custom legend
+                    legend <- get_legend(input, 'Heat')
+                    my_aes <- get_aes(input, 'Heat')
+                    ggplot(data =  dat, 
+                           mapping = my_aes
+                    ) + 
+                        geom_tile() + 
+                        theme_fivethirtyeight() +
+                        ggtitle("Heatmap")+
+                        xlab(input$xHeat) +
+                        ylab(input$yHeat) +
+                        theme(plot.title = element_text(hjust = 0.5), 
+                              axis.title = element_text(),
+                              panel.background = element_blank(),
+                              plot.background = element_blank(),
+                              legend.background = element_blank()) +
+                        guides(color = guide_legend(title = legend$color),
+                               size = guide_legend(title = legend$size),
+                               fill = guide_legend(title = legend$fill))
+                    
+                }
+            }
+        })
+    })
     
     observeEvent(input$plot1_dblclick, {
         brush <- input$plot1_brush
@@ -127,7 +200,11 @@ server <- function(input, output) {
     
 }
 
-get_legend <- function(colValue, sizeValue, fillValue) {
+
+get_legend <- function(input, shortname) {
+    colValue <- input[[v('col', shortname)]]
+    sizeValue <- input[[v('size', shortname)]]
+    fillValue <- input[[v('fill', shortname)]]
     if (colValue != 'None') color <- colValue
     else color <- ""
     if (sizeValue != 'None') size <- sizeValue
@@ -144,13 +221,14 @@ set_value <- function(value, standard) {
     standard
 }
 
-get_aes <- function(input) {
-    names = c("xScat", "yScat", "colScat", "sizeScat", "fillScat")
+get_aes <- function(input, shortname) {
     mappings <- c("x", "y", "col", "size", "fill")
+    names <- paste0(mappings, shortname)
     my_aes <- list()
     for (name in names) {
+        #browser()
         if (input[[name]] != 'None') {
-            if (name %in% c('xScat', 'yScat')) {
+            if (name %in% names[1:2]) {
                 my_aes <- c(my_aes, sprintf("eval(sym(input$%s))", name))
             } else {
                 my_aes <- c(my_aes, sprintf("eval(set_value(input$%s, NULL))", name))
@@ -158,10 +236,38 @@ get_aes <- function(input) {
         }
         else my_aes <- c(my_aes, 'None')
     }
-    #browser()
     names(my_aes) <- mappings
     my_aes <- my_aes[if_else(my_aes != 'None', TRUE, FALSE)]
     do.call(aes_string, my_aes)
+}
+
+create_plot <- function(input, datapath, shortname, title, plot_type, ranges) {
+    dat <- read.csv(datapath, stringsAsFactors = TRUE)
+    # custom legend
+    legend <- get_legend(input, shortname)
+    my_aes <- get_aes(input, shortname)
+    #browser()
+    ggplot(data =  dat, 
+           mapping = my_aes
+    ) + 
+        get(plot_type)() +
+        theme_fivethirtyeight() +
+        ggtitle(title) +
+        xlab(input[[v("x", shortname)]]) +
+        ylab(input[[v("x", shortname)]]) +
+        theme(plot.title = element_text(hjust = 0.5), 
+              axis.title = element_text(),
+              panel.background = element_blank(),
+              plot.background = element_blank(),
+              legend.background = element_blank()) +
+        coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand = FALSE) +
+        guides(color = guide_legend(title = legend$color),
+               size = guide_legend(title = legend$size),
+               fill = guide_legend(title = legend$fill))
+}
+
+v <- function(style, shortname) {
+    paste0(style, shortname)
 }
 
 create_ui <- function(shortname = "Scat", attributes_logicals, data_file) {
@@ -183,6 +289,10 @@ create_ui <- function(shortname = "Scat", attributes_logicals, data_file) {
     
     l <- merge_lists(l, actionButton(paste0("button", shortname), "Generate plot"))
     l
+}
+
+merge_lists <- function(l1, l2) {
+    c(l1, list(l2))
 }
 
 shinyApp(ui = ui, server = server)
